@@ -17,10 +17,37 @@
 #
 #===============================================================================
 
+if defined?(PluginManager)
+  PluginManager.register({                                                 
+    :name    => "Ball Catch Game",                                        
+    :version => "1.1",                                                     
+    :link    => "https://www.pokecommunity.com/showthread.php?t=317142",             
+    :credits => "FL"
+  })
+end
+
 class CatchGameScene
-  def update
-    pbUpdateSpriteHash(@sprites)
-  end
+  # The number of positions or columns for the balls/player
+  COLUMNS=7
+  
+  # The speed of the ball in pixels per frame
+  BALL_SPEED=8
+  
+  # Max distance allowed between balls
+  MAX_DISTANCE=1
+  
+  # The line/ball proportion
+  LINE_PER_BALL=3.0
+  
+  # The number of frames until the next value of @lineArray
+  FRAMES_PER_LINE=12
+  
+  # Player sprite speed. Lower = move faster. 1 = Instant move
+  PLAYER_FRAMES_TO_MOVE=4
+  
+  X_START=56
+  Y_START=-40
+  X_GAIN=64
   
   def pbStartScene(balls)
     @sprites={} 
@@ -28,21 +55,24 @@ class CatchGameScene
     @viewport.z=99999
     @sprites["background"]=IconSprite.new(0,0,@viewport)
     @sprites["background"].setBitmap("Graphics/Pictures/backgroundcatch")
-    @sprites["background"].x=(
-        Graphics.width-@sprites["background"].bitmap.width)/2
-    @sprites["background"].y=(
-        Graphics.height-@sprites["background"].bitmap.height)/2
+    @sprites["background"].x=(Graphics.width-@sprites["background"].bitmap.width)/2
+    @sprites["background"].y=(Graphics.height-@sprites["background"].bitmap.height)/2
     @sprites["player"]=IconSprite.new(0,0,@viewport)
     @sprites["player"].setBitmap("Graphics/Pictures/catcher")
-    @sprites["overlay"]=BitmapSprite.new(
-        Graphics.width,Graphics.height,@viewport)
+    @sprites["player"].y=340-@sprites["player"].bitmap.height/2
+    @sprites["overlay"]=BitmapSprite.new(Graphics.width,Graphics.height,@viewport)
     pbSetSystemFont(@sprites["overlay"].bitmap)
     @balls=balls
     initializeBallsPositions
     @frameCount=-1
-    @playerPosition=POSITIONS/2
-    updatePlayerPosition
+    @playerColumn=COLUMNS/2
+    @playerPosition = playerColumnPosition(@playerColumn)
+    refreshPlayerPosition
     @score=0
+    @pickSE="Player jump"
+    @pickSE="jump" if !pbResolveAudioSE(@pickSE) # Compatibility with older versions
+    @outSE="Battle ball drop"
+    @outSE="balldrop" if !pbResolveAudioSE(@outSE) # Compatibility with older versions
     pbDrawText
     pbBGMPlay("021-Field04")
     pbFadeInAndShow(@sprites) { update }
@@ -51,24 +81,36 @@ class CatchGameScene
   def pbDrawText
     overlay=@sprites["overlay"].bitmap
     overlay.clear 
-    score=_INTL("Score: {1}/{2}",@score,@balls)
-    baseColor=Color.new(72,72,72)
-    shadowColor=Color.new(160,160,160)
-    textPositions=[
-       [score,8,2,false,baseColor,shadowColor],
-    ]
+    score=_INTL("Score: {1}/{2}",@score,@balls)    
+    baseColor=Color.new(248,248,248)
+    shadowColor=Color.new(112,112,112)
+    textPositions=[[score,8,2,false,baseColor,shadowColor]]
     pbDrawTextPositions(overlay,textPositions)
   end
   
-  YSTART=-40
-  XSTART=56
-  XGAIN=64
-  
   def updatePlayerPosition
-    @sprites["player"].x=(
-        XSTART+XGAIN*@playerPosition-@sprites["player"].bitmap.width/2)
-    @sprites["player"].y=340-@sprites["player"].bitmap.height/2
+    targetPosition = playerColumnPosition(@playerColumn)
+    return if @playerPosition == targetPosition
+    gain = X_GAIN/PLAYER_FRAMES_TO_MOVE.to_f
+    if targetPosition>@playerPosition
+      @playerPosition=[@playerPosition+gain, targetPosition].min
+    else
+      @playerPosition=[@playerPosition-gain, targetPosition].max
+    end
+    refreshPlayerPosition
+  end
+      
+  def refreshPlayerPosition
+    @sprites["player"].x=@playerPosition-@sprites["player"].bitmap.width/2
+  end
+      
+  def playerColumnPosition(column)
+    return X_START+X_GAIN*column
   end 
+  
+  def update
+    pbUpdateSpriteHash(@sprites)
+  end
   
   def initializeBall(position)
     i=0
@@ -87,42 +129,36 @@ class CatchGameScene
       end
       i+=1
     end
-    @sprites["ball#{i}"].x=XSTART+XGAIN*position
-    @sprites["ball#{i}"].y=YSTART
+    @sprites["ball#{i}"].x=X_START+X_GAIN*position
+    @sprites["ball#{i}"].y=Y_START
   end  
-  
-  POSITIONS=7 # The number of positions or columns for the balls/player
-  LINEPERBALL=3.0 # The line/ball proportion
-  FRAMESPERLINE=12 # The number of frames until the next value of @lineArray
-  BALLSPEED=8 # The speed of the ball in pixels per frame
-  MAXDISTANCE=1 # Max distance allowed between balls
    
   def initializeBallsPositions
-    lines=(LINEPERBALL*@balls).floor
+    lines=(LINE_PER_BALL*@balls).floor
     @lineArray=[]
     @lineArray[lines-1]=nil # One position for every line
     loop do
       while @lineArray.nitems<@balls
         ballIndex = rand(lines)
-        @lineArray[ballIndex] = rand(POSITIONS) if !@lineArray[ballIndex]
+        @lineArray[ballIndex] = rand(COLUMNS) if !@lineArray[ballIndex]
       end  
       for i in 0...@lineArray.size
         next if !@lineArray[i]
         # Checks if the ball isn't too distant to pick.
         # If is, remove from the array
-        checkRight(i+1,@lineArray[i]+MAXDISTANCE)
-        checkLeft(i+1,@lineArray[i]-MAXDISTANCE)
+        checkRight(i+1,@lineArray[i]+MAX_DISTANCE)
+        checkLeft(i+1,@lineArray[i]-MAX_DISTANCE)
       end
       return if @lineArray.nitems==@balls
     end
   end  
   
   def checkRight(index, position)
-    return if (position>=POSITIONS || index>=@lineArray.size)
+    return if (position>=COLUMNS || index>=@lineArray.size)
     if (@lineArray[index] && @lineArray[index]>position)
       @lineArray[index]=nil
     end
-    checkRight(index+1,position+MAXDISTANCE)
+    checkRight(index+1,position+MAX_DISTANCE)
   end  
   
   def checkLeft(index, position)
@@ -130,7 +166,7 @@ class CatchGameScene
     if (@lineArray[index] && @lineArray[index]<position)
       @lineArray[index]=nil
     end
-    checkLeft(index+1,position-MAXDISTANCE)
+    checkLeft(index+1,position-MAX_DISTANCE)
   end  
   
   def applyCollisions
@@ -138,14 +174,14 @@ class CatchGameScene
     loop do
       break if !@sprites["ball#{i}"]
       if @sprites["ball#{i}"].visible
-        @sprites["ball#{i}"].y+=BALLSPEED
+        @sprites["ball#{i}"].y+=BALL_SPEED
         @sprites["ball#{i}"].angle+=10
         ballBottomY = @sprites["ball#{i}"].y+@sprites["ball#{i}"].bitmap.height
        
         # Collision with player
-        ballPosition=(@sprites["ball#{i}"].x-XSTART+
-            @sprites["ball#{i}"].bitmap.width/2)/XGAIN
-        if ballPosition==@playerPosition
+        ballPosition=(@sprites["ball#{i}"].x-X_START+
+            @sprites["ball#{i}"].bitmap.width/2)/X_GAIN
+        if ballPosition==@playerColumn
           collisionStartY=-8 
           collisionEndY=10
           # Based at target center
@@ -155,7 +191,7 @@ class CatchGameScene
           if(collisionStartY < ballBottomY && collisionEndY > ballBottomY)
             # The ball was picked  
             @sprites["ball#{i}"].visible=false
-            pbSEPlay("jump")
+            pbSEPlay(@pickSE)
             @score+=1
             pbDrawText # Update score at screen
           end
@@ -166,7 +202,7 @@ class CatchGameScene
         if(ballBottomY>screenLimit)
           # The ball was out of screen 
           @sprites["ball#{i}"].visible=false
-          pbSEPlay("balldrop")
+          pbSEPlay(@outSE)
         end
       end  
       i+=1
@@ -187,10 +223,9 @@ class CatchGameScene
     loop do
       @frameCount+=1
       applyCollisions
-      indexNextBall=@frameCount/FRAMESPERLINE
+      indexNextBall=@frameCount/FRAMES_PER_LINE
       stopBalls = indexNextBall>=@lineArray.size
-      if (@frameCount%FRAMESPERLINE==0 && !stopBalls &&
-          @lineArray[indexNextBall])
+      if @frameCount%FRAMES_PER_LINE==0 && !stopBalls && @lineArray[indexNextBall]
         initializeBall(@lineArray[indexNextBall])
       end
       Graphics.update
@@ -200,14 +235,13 @@ class CatchGameScene
         Kernel.pbMessage(_INTL("Game end!"))
         break
       end  
-      if Input.repeat?(Input::LEFT) && @playerPosition>0
-        @playerPosition=@playerPosition-1
-        updatePlayerPosition
+      if Input.repeat?(Input::LEFT) && @playerColumn>0
+        @playerColumn=@playerColumn-1
       end
-      if Input.repeat?(Input::RIGHT) && @playerPosition<(POSITIONS-1)
-        @playerPosition=@playerPosition+1
-        updatePlayerPosition
+      if Input.repeat?(Input::RIGHT) && @playerColumn<(COLUMNS-1)
+        @playerColumn=@playerColumn+1
       end
+      updatePlayerPosition
     end
     return @score
   end
@@ -219,6 +253,12 @@ class CatchGameScene
     @viewport.dispose
   end
 end
+  
+class Array
+  def nitems
+    count{|x| !x.nil?}
+  end
+end unless Array.method_defined?(:nitems)
 
 class CatchGame
   def initialize(scene)
@@ -234,7 +274,11 @@ class CatchGame
 end
 
 def pbCatchGame(balls=50)
-  scene=CatchGameScene.new
-  screen=CatchGame.new(scene)
-  return screen.pbStartScreen(balls)
+  ret = nil
+  pbFadeOutIn(99999) { 
+    scene=CatchGameScene.new
+    screen=CatchGame.new(scene)
+    ret = screen.pbStartScreen(balls)
+  }
+  return ret
 end
