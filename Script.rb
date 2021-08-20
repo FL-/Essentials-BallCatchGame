@@ -2,7 +2,7 @@
 # * Ball Catch Game - by FL (Credits will be apreciated)
 #===============================================================================
 #
-# This script is for Pokémon Essentials. It's a simple minigame where the player
+# This script is for PokÃ©mon Essentials. It's a simple minigame where the player
 # must pick the balls that are falling at screen.
 #
 #== INSTALLATION ===============================================================
