@@ -7,31 +7,36 @@
 #
 #== INSTALLATION ===============================================================
 #
-# Put it above main, put a 512x384 background for this screen in 
-# "Graphics/Pictures/backgroundcatch" location, a 80x44 catcher/basket at 
-# "Graphics/Pictures/catcher" and a 20x20 ball at "Graphics/Pictures/ballcatch".
-# May works with other image sizes.
+# Put it above main or convert into a plugin. Create "Ball Catch" folder at 
+# Graphics/Pictures and put the pictures (may works with other sizes):
+# -  20x20  ball
+# - 512x384 bg 
+# -  80x44  catcher
 #
 #== HOW TO USE =================================================================
 #
 # To call this script, use the script command 'pbCatchGame' This method will 
-# return the number of picked balls. Additionally, you can pass game parameters
-# using CatchGameParameters. Example:
+# return the number of picked balls or nil if cancelled. 
+#
+#=== NOTES =====================================================================
+#
+# You can pass game parameters using CatchGameParameters. Example:
 #  
 #  params = CatchGameParameters.new
 #  params.balls = 20
 #  params.initialFramesPerLine = 16
 #  params.finalFramesPerLine = 8
+#  params.canExit = false
 #  pbCatchGame(params)
 #
 # Look at class CatchGameParameters for full parameter list.
 #
 #===============================================================================
 
-if defined?(PluginManager)
+if defined?(PluginManager) && !PluginManager.installed?("Ball Catch Game")
   PluginManager.register({                                                 
     :name    => "Ball Catch Game",                                        
-    :version => "1.2",                                                     
+    :version => "1.3",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=317142",             
     :credits => "FL"
   })
@@ -60,6 +65,9 @@ class CatchGameParameters
   # Lines per ball proportion. Lower = less vertical "gaps" between balls
   attr_accessor :linePerBall
   
+  # If player can exit
+  attr_accessor :canExit
+  
   # Set the default values
   def initialize 
     @initialBallSpeed = 8.0
@@ -70,6 +78,7 @@ class CatchGameParameters
     @columns = 7
     @playerFramesToMove = 4
     @linePerBall = 3
+    @canExit = true
   end
   
   def totalLines
@@ -104,11 +113,11 @@ class CatchGameScene
     @viewport=Viewport.new(0,0,Graphics.width,Graphics.height)
     @viewport.z=99999
     @sprites["background"]=IconSprite.new(0,0,@viewport)
-    @sprites["background"].setBitmap("Graphics/Pictures/backgroundcatch")
+    @sprites["background"].setBitmap("Graphics/Pictures/Ball Catch/bg")
     @sprites["background"].x=(Graphics.width-@sprites["background"].bitmap.width)/2
     @sprites["background"].y=(Graphics.height-@sprites["background"].bitmap.height)/2
     @sprites["player"]=IconSprite.new(0,0,@viewport)
-    @sprites["player"].setBitmap("Graphics/Pictures/catcher")
+    @sprites["player"].setBitmap("Graphics/Pictures/Ball Catch/catcher")
     @sprites["player"].y=340-@sprites["player"].bitmap.height/2
     @sprites["overlay"]=BitmapSprite.new(Graphics.width,Graphics.height,@viewport)
     pbSetSystemFont(@sprites["overlay"].bitmap)
@@ -134,7 +143,7 @@ class CatchGameScene
     score=_INTL("Score: {1}/{2}",@score,@params.balls)    
     baseColor=Color.new(248,248,248)
     shadowColor=Color.new(112,112,112)
-    textPositions=[[score,8,2,false,baseColor,shadowColor]]
+    textPositions=[[score,8,8,false,baseColor,shadowColor]]
     pbDrawTextPositions(overlay,textPositions)
   end
   
@@ -168,7 +177,7 @@ class CatchGameScene
     loop do
       if !@sprites["ball#{i}"]
         @sprites["ball#{i}"]=IconSprite.new(0,0,@viewport)
-        @sprites["ball#{i}"].setBitmap("Graphics/Pictures/ballcatch")
+        @sprites["ball#{i}"].setBitmap("Graphics/Pictures/Ball Catch/ball")
         @sprites["ball#{i}"].ox=@sprites["ball#{i}"].bitmap.width/2
         @sprites["ball#{i}"].oy=@sprites["ball#{i}"].bitmap.height/2
         break
@@ -287,7 +296,7 @@ class CatchGameScene
       Input.update
       self.update
       if stopBalls && !thereBallsInGame?
-        Kernel.pbMessage(_INTL("Game end!"))
+        pbMessage(_INTL("Game end!"))
         break
       end  
       if Input.repeat?(Input::LEFT) && @playerColumn>0
@@ -295,6 +304,9 @@ class CatchGameScene
       end
       if Input.repeat?(Input::RIGHT) && @playerColumn<(@params.columns-1)
         @playerColumn=@playerColumn+1
+      end
+      if Input.repeat?(Input::B) && @params.canExit
+        return nil if pbConfirmMessage(_INTL("Exit?"))
       end
       updatePlayerPosition      
       framesToNextBall-=1
@@ -313,12 +325,6 @@ class CatchGameScene
     return (t.to_f-a)/(b-a)
   end
 end
-  
-class Array
-  def nitems
-    count{|x| !x.nil?}
-  end
-end unless Array.method_defined?(:nitems)
 
 class CatchGame
   def initialize(scene)
@@ -342,3 +348,25 @@ def pbCatchGame(parameters = nil)
   }
   return ret
 end
+
+#===============================================================================
+# For compatibility with older Essentials
+#===============================================================================
+
+class Array
+  def nitems
+    count{|x| !x.nil?}
+  end
+end unless Array.method_defined?(:nitems)
+
+def pbMessage(
+  message, commands = nil, cmdIfCancel = 0, skin = nil, defaultCmd = 0, &block
+)
+  return Kernel.pbMessage(
+    message, commands, cmdIfCancel, skin, defaultCmd, &block
+  )
+end unless defined?(:pbMessage)
+
+def pbConfirmMessage(message, &block)
+  return Kernel.pbConfirmMessage(message, &block)
+end unless defined?(:pbConfirmMessage)
