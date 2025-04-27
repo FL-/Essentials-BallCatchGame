@@ -36,7 +36,7 @@
 if defined?(PluginManager) && !PluginManager.installed?("Ball Catch Game")
   PluginManager.register({                                                 
     :name    => "Ball Catch Game",                                        
-    :version => "1.4",                                                     
+    :version => "1.4.1",                                                     
     :link    => "https://www.pokecommunity.com/showthread.php?t=317142",             
     :credits => "FL"
   })
@@ -418,7 +418,7 @@ module BallCatch
     end
 
     def bgm_path
-      return "021-Field04" if MAJOR_VERSION < 17
+      return "021-Field04" if MAJOR_VERSION < 20
       return "Safari Zone"
     end
   end
